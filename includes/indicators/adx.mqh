@@ -1,17 +1,10 @@
-// indicators/adx.mqh
+// indicators/adx.mqh - symbol-scoped ADX
 
-int g_handle_adx=-1;
-
-int ADX_Handle()
+double ADX_Value(const string symbol,int period)
   {
-   if(g_handle_adx<0) g_handle_adx = iADX(_Symbol,PERIOD_CURRENT,Config.adx_period);
-   return g_handle_adx;
-  }
-
-double ADX_Value(int period)
-  {
-   double arr[1];
-   int handle = ADX_Handle();
-   if(CopyBuffer(handle,0,0,1,arr)>0) return arr[0];
-   return 0.0;
+   int handle = iADX(symbol,PERIOD_CURRENT,period);
+   if(handle==INVALID_HANDLE) return 0.0;
+   double buf[]; ArrayResize(buf,1);
+   if(CopyBuffer(handle,0,0,1,buf)<=0) { IndicatorRelease(handle); return 0.0; }
+   double val = buf[0]; IndicatorRelease(handle); return val;
   }

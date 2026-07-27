@@ -1,11 +1,15 @@
-// config.mqh - consolidates input parameters
+// config.mqh - inputs for multi-symbol and persistence
 
 #property copyright "vitizelamabuza-ops"
-#property version   "1.0"
+#property version   "1.1"
 
-//+------------------------------------------------------------------+
-input int    InpEMAFast         = 50;      // EMA fast period (e.g., 50)
-input int    InpEMASlow         = 200;     // EMA slow period (e.g., 200)
+// Symbol management
+input bool   InpMultiSymbol       = false;            // Enable multi-symbol management
+input string InpSymbolsList       = "";             // Comma-separated symbols when multi-symbol enabled (e.g., EURUSD,GBPUSD)
+
+// Indicator settings
+input int    InpEMAFast         = 50;      // EMA fast period
+input int    InpEMASlow         = 200;     // EMA slow period
 input int    InpRSIPeriod       = 14;      // RSI period
 input double InpRSIThresholdBuy = 50.0;   // RSI threshold for buy
 input double InpRSIThresholdSell= 50.0;   // RSI threshold for sell
@@ -14,24 +18,29 @@ input int    InpMACDSlow        = 26;      // MACD slow
 input int    InpMACDSignal      = 9;       // MACD signal
 input int    InpATRPeriod       = 14;      // ATR period
 input double InpATRRMultiplier  = 3.0;     // ATR multiplier for SL
+
+// Risk & trade limits
 input double InpRiskPercent     = 0.5;     // Risk per trade (%)
 input double InpRiskReward      = 2.0;     // Risk:Reward default 1:2
-input int    InpMaxDailyTrades  = 5;       // Max daily trades
-input double InpMaxDailyLoss    = 5.0;     // Max daily loss (%)
+input int    InpMaxDailyTrades  = 5;       // Max daily trades per symbol
+input double InpMaxDailyLoss    = 5.0;     // Max daily loss per symbol (%)
 input double InpMaxDrawdown     = 20.0;    // Max drawdown (%)
-input double InpMaxSpread      = 20.0;     // Max spread in points
-input int    InpSlippage       = 3;        // Max slippage in points
+
+// Filters
+input double InpMaxSpreadPoints = 20.0;    // Max spread in points
+input int    InpSlippage        = 3;       // Max slippage in points
 input int    InpMinCandlePoints = 10;      // Minimum candle body size in points
-input bool   InpUseADX          = false;   // Enable ADX trend strength filter
+input bool   InpUseADX          = false;   // Enable ADX
 input int    InpADXPeriod       = 14;      // ADX period
 input double InpADXThreshold    = 20.0;    // ADX threshold
-input bool   InpNewsFilter      = false;   // News filter (placeholder)
+input bool   InpNewsFilter      = false;   // News filter (not implemented)
 input bool   InpCloseOpposite   = true;    // Close opposite trades on new trade
-input bool   InpPreventDuplicate= true;    // Prevent duplicate trades
+input bool   InpPreventDuplicate= true;    // Prevent duplicate trades per symbol
 
-// Bind into a simple struct for internal use
 struct SConfig
   {
+   bool multi_symbol;
+   string symbols_list;
    int ema_fast_period;
    int ema_slow_period;
    int rsi_period;
@@ -60,7 +69,8 @@ SConfig Config;
 
 bool ConfigValidate()
   {
-   // Map inputs
+   Config.multi_symbol = InpMultiSymbol;
+   Config.symbols_list = InpSymbolsList;
    Config.ema_fast_period = InpEMAFast;
    Config.ema_slow_period = InpEMASlow;
    Config.rsi_period      = InpRSIPeriod;
@@ -76,7 +86,7 @@ bool ConfigValidate()
    Config.max_daily_trades = InpMaxDailyTrades;
    Config.max_daily_loss = InpMaxDailyLoss;
    Config.max_drawdown = InpMaxDrawdown;
-   Config.max_spread_points = InpMaxSpread;
+   Config.max_spread_points = InpMaxSpreadPoints;
    Config.slippage_points = InpSlippage;
    Config.min_candle_points = InpMinCandlePoints;
    Config.use_adx = InpUseADX;
@@ -86,7 +96,6 @@ bool ConfigValidate()
    Config.close_opposite = InpCloseOpposite;
    Config.prevent_duplicate = InpPreventDuplicate;
 
-   // Simple validation
    if(Config.ema_fast_period<=0 || Config.ema_slow_period<=0) return false;
    if(Config.rsi_period<=0) return false;
    if(Config.atr_period<=0) return false;

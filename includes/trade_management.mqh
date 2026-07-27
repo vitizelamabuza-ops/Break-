@@ -1,32 +1,37 @@
-// trade_management.mqh
+// trade_management.mqh - symbol-aware trade management
 
 void TradeManagerInit(const string symbol)
   {
-   // placeholder for init
+   // placeholder
   }
 
-bool SignalsCanOpen(int signalType)
+bool SignalsCanOpen(const string symbol,int signalType)
   {
-   // check duplicates
    if(Config.prevent_duplicate)
      {
       for(int i=0;i<PositionsTotal();i++)
         {
-         if(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY && signalType==BUY_SIGNAL) return false;
-         if(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_SELL && signalType==SELL_SIGNAL) return false;
+         if(PositionSelectByIndex(i))
+           {
+            string sym = PositionGetString(POSITION_SYMBOL);
+            if(sym!=symbol) continue;
+            int type = (int)PositionGetInteger(POSITION_TYPE);
+            if(type==POSITION_TYPE_BUY && signalType==BUY_SIGNAL) return false;
+            if(type==POSITION_TYPE_SELL && signalType==SELL_SIGNAL) return false;
+           }
         }
      }
    return true;
   }
 
-void ManageOpenTrades()
+void ManageOpenTrades(const string symbol)
   {
-   // iterate positions and apply trailing stop, break even, partial close
    for(int i=PositionsTotal()-1;i>=0;i--)
      {
       if(PositionSelectByIndex(i))
         {
          string sym = PositionGetString(POSITION_SYMBOL);
+         if(sym!=symbol) continue;
          ulong ticket = PositionGetInteger(POSITION_TICKET);
          double volume = PositionGetDouble(POSITION_VOLUME);
          int type = (int)PositionGetInteger(POSITION_TYPE);
@@ -35,20 +40,34 @@ void ManageOpenTrades()
          double tp = PositionGetDouble(POSITION_TP);
          double curPrice = (type==POSITION_TYPE_BUY)?SymbolInfoDouble(sym,SYMBOL_BID):SymbolInfoDouble(sym,SYMBOL_ASK);
 
-         // ATR trailing example
-         double atr = ATR_Value(Config.atr_period);
+         double atr = ATR_Value(sym,Config.atr_period);
          double trail = atr * Config.atr_multiplier;
          if(trail>0)
            {
             if(type==POSITION_TYPE_BUY)
               {
                double newSL = curPrice - trail;
-               if(newSL>sl) order_trade.PositionModify(sym,newSL,tp);
+               if(newSL>sl) 
+                 {
+                  // modify
+                  MqlTradeRequest req; MqlTradeResult res; ZeroMemory(req); ZeroMemory(res);
+                  req.action = TRADE_ACTION_SLTP;
+                  req.position = ticket;
+                  req.sl = newSL;
+                  OrderSend(req,res);
+                 }
               }
             else
               {
                double newSL = curPrice + trail;
-               if(newSL<sl || sl==0.0) order_trade.PositionModify(sym,newSL,tp);
+               if(newSL<sl || sl==0.0)
+                 {
+                  MqlTradeRequest req; MqlTradeResult res; ZeroMemory(req); ZeroMemory(res);
+                  req.action = TRADE_ACTION_SLTP;
+                  req.position = ticket;
+                  req.sl = newSL;
+                  OrderSend(req,res);
+                 }
               }
            }
         }

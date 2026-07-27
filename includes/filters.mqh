@@ -1,41 +1,33 @@
-// filters.mqh - trading filters
+// filters.mqh - symbol-scoped filters
 
-string g_symbol_filter="";
-
-void FiltersInit(const string symbol)
+bool FiltersAllowTrading(const string symbol)
   {
-   g_symbol_filter = symbol;
-  }
-
-bool FiltersAllowTrading()
-  {
-   // Spread filter
-   double ask = SymbolInfoDouble(g_symbol_filter,SYMBOL_ASK);
-   double bid = SymbolInfoDouble(g_symbol_filter,SYMBOL_BID);
-   double spread_points = (ask-bid)/SymbolInfoDouble(g_symbol_filter,SYMBOL_POINT);
-   if(spread_points>Config.max_spread_points) { Log("Spread too high: " + DoubleToString(spread_points)); return false; }
+   double ask = SymbolInfoDouble(symbol,SYMBOL_ASK);
+   double bid = SymbolInfoDouble(symbol,SYMBOL_BID);
+   double spread_points = (ask-bid)/SymbolInfoDouble(symbol,SYMBOL_POINT);
+   if(spread_points>Config.max_spread_points) { LogPrint(StringFormat("%s: Spread too high %.1f",symbol,spread_points)); return false; }
 
    // Minimum candle body
-   if(LastCandleBodyPoints()<Config.min_candle_points) { Log("Candle body too small"); return false; }
+   double open0 = iOpen(symbol,PERIOD_CURRENT,1);
+   double close0= iClose(symbol,PERIOD_CURRENT,1);
+   double diff = MathAbs(close0-open0);
+   double point = SymbolInfoDouble(symbol,SYMBOL_POINT);
+   if(point>0 && (diff/point) < Config.min_candle_points) { LogPrint(StringFormat("%s: Candle body too small",symbol)); return false; }
 
-   // Time/session filter: allow London or NewYork sessions only
+   // Session filter (rough)
    int hour = TimeHour(TimeCurrent());
-   bool inSession = (hour>=7 && hour<=17) || (hour>=12 && hour<=21); // rough windows
-   if(!inSession) { Log("Outside trading session"); return false; }
+   bool inSession = (hour>=7 && hour<=17) || (hour>=12 && hour<=21);
+   if(!inSession) { LogPrint(StringFormat("%s: Outside trading session",symbol)); return false; }
 
-   // Optional ADX filter
    if(Config.use_adx)
      {
-      double adx = ADX_Value(Config.adx_period);
-      if(adx<Config.adx_threshold) { Log("ADX below threshold: "+DoubleToString(adx)); return false; }
+      double adx = ADX_Value(symbol,Config.adx_period);
+      if(adx<Config.adx_threshold) { LogPrint(StringFormat("%s: ADX %.2f below threshold",symbol,adx)); return false; }
      }
 
-   // News filter placeholder
    if(Config.news_filter)
      {
-      // External integration required. For now, act conservative and allow only if disabled.
-      Log("News filter enabled but not implemented - skipping trade");
-      return false;
+      LogPrint(StringFormat("%s: News filter enabled but not implemented",symbol)); return false;
      }
 
    return true;

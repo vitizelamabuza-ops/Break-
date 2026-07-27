@@ -1,18 +1,18 @@
 // utils.mqh - helper utilities
 
-void LogPrint(const string fmt,...)
+void LogPrint(const string fmt)
   {
-   string msg = StringFormat(fmt,ArrayRange(fmt,0)); // placeholder for varargs
+   // simple wrapper to Print and File log via Logging functions
+   string msg = fmt;
    Print(msg);
-   FileWriteString("BreakEA_log.txt",StringFormat("%s %s\n",TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS),msg));
+   if(g_logOpened && g_logHandle>=0) FileWrite(g_logHandle,TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS)+" " + msg);
   }
 
-// Helper: get last closed candle body size in points
-int LastCandleBodyPoints()
+string StringTrim(const string s)
   {
-   double open0 = iOpen(_Symbol,PERIOD_CURRENT,1);
-   double close0= iClose(_Symbol,PERIOD_CURRENT,1);
-   double diff = MathAbs(close0-open0);
-   double point = SymbolInfoDouble(_Symbol,SYMBOL_POINT);
-   return (int)(diff/point);
+   int i=0,j=StringLen(s)-1;
+   while(i<=j && StringGetCharacter(s,i)==32) i++;
+   while(j>=i && StringGetCharacter(s,j)==32) j--;
+   if(i>j) return "";
+   return StringSubstr(s,i,j-i+1);
   }

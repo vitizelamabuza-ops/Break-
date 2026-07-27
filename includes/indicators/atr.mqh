@@ -1,17 +1,10 @@
-// indicators/atr.mqh
+// indicators/atr.mqh - symbol-scoped ATR
 
-int g_handle_atr=-1;
-
-int ATR_Handle()
+double ATR_Value(const string symbol,int period)
   {
-   if(g_handle_atr<0) g_handle_atr = iATR(_Symbol,PERIOD_CURRENT,Config.atr_period);
-   return g_handle_atr;
-  }
-
-double ATR_Value(int period)
-  {
-   double arr[1];
-   int handle = ATR_Handle();
-   if(CopyBuffer(handle,0,0,1,arr)>0) return arr[0];
-   return SymbolInfoDouble(_Symbol,SYMBOL_POINT); // fallback
+   int handle = iATR(symbol,PERIOD_CURRENT,period);
+   if(handle==INVALID_HANDLE) return SymbolInfoDouble(symbol,SYMBOL_POINT);
+   double buf[]; ArrayResize(buf,1);
+   if(CopyBuffer(handle,0,0,1,buf)<=0) { IndicatorRelease(handle); return SymbolInfoDouble(symbol,SYMBOL_POINT); }
+   double val = buf[0]; IndicatorRelease(handle); return val;
   }

@@ -1,12 +1,11 @@
 //+------------------------------------------------------------------+
-//| BreakEA.mq5                                                      |
-//| Modular, production-oriented MetaTrader 5 Expert Advisor         |
-//| Author: Copilot (generated)                                      |
+//| BreakEA.mq5 - Multi-symbol capable EA with persistence           |
 //+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include "includes/config.mqh"
 #include "includes/utils.mqh"
 #include "includes/logging.mqh"
+#include "includes/persistence.mqh"
 #include "includes/indicators/ema.mqh"
 #include "includes/indicators/rsi.mqh"
 #include "includes/indicators/macd.mqh"
@@ -18,125 +17,130 @@
 #include "includes/trade_management.mqh"
 
 CTrade Trade;
-string g_symbol;
-int    g_digits;
-double g_point;
+string g_symbols[];
+int    g_symbol_count=0;
 
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   g_symbol = _Symbol;
-   g_digits = (int)SymbolInfoInteger(g_symbol,SYMBOL_DIGITS);
-   g_point  = SymbolInfoDouble(g_symbol,SYMBOL_POINT);
-
-   if(!LoggingInit())
-     return(INIT_FAILED);
-
-   LogPrint("Initializing BreakEA on %s",g_symbol);
+   if(!LoggingInit()) return(INIT_FAILED);
+   LogPrint("BreakEA initializing multi-symbol manager");
 
    if(!ConfigValidate())
      {
-      LogPrint("Configuration invalid");
+      LogPrint("Config invalid");
       return(INIT_FAILED);
      }
 
-   IndicatorsInit(g_symbol);
-   FiltersInit(g_symbol);
-   RiskInit(g_symbol);
-   TradeManagerInit(g_symbol);
+   // Prepare symbol list
+   if(Config.multi_symbol)
+     {
+      g_symbol_count = StringSplit(Config.symbols_list,',',g_symbols);
+      for(int i=0;i<g_symbol_count;i++) g_symbols[i]=StringTrim(g_symbols[i]);
+      if(g_symbol_count==0) { LogPrint("Multi-symbol enabled but no symbols provided"); return(INIT_FAILED); }
+     }
+   else
+     {
+      g_symbol_count = 1;
+      ArrayResize(g_symbols,1);
+      g_symbols[0] = _Symbol;
+     }
 
-   LogPrint("Initialization complete");
+   // Initialize modules for each symbol
+   for(int i=0;i<g_symbol_count;i++)
+     {
+      string s = g_symbols[i];
+      IndicatorsInit(s);
+      FiltersInit(s);
+      RiskInit(s);
+      TradeManagerInit(s);
+      PersistenceLoad(s);
+     }
+
+   LogPrint("Initialization complete for %d symbols",g_symbol_count);
    return(INIT_SUCCEEDED);
   }
 
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-   LogPrint("Deinitializing BreakEA: reason=%d",reason);
+   for(int i=0;i<g_symbol_count;i++) PersistenceSave(g_symbols[i]);
    LoggingClose();
   }
 
 //+------------------------------------------------------------------+
 void OnTick()
   {
-   static datetime lastTickTime=0;
-   if(TimeCurrent()==lastTickTime) return;
-   lastTickTime=TimeCurrent();
+   static datetime lastRun=0;
+   if(TimeCurrent()==lastRun) return; lastRun=TimeCurrent();
 
-   // Basic filters
-   if(!FiltersAllowTrading()) return;
-
-   // Prevent over daily loss / trade caps
-   if(!RiskAllowTrading()) return;
-
-   // Read indicators
-   double emaFast = EMA_Value(Config.ema_fast_period);
-   double emaSlow = EMA_Value(Config.ema_slow_period);
-   double rsi     = RSI_Value(Config.rsi_period);
-   MACDData macd  = MACD_Value(Config.macd_fast,Config.macd_slow,Config.macd_signal);
-   double atr     = ATR_Value(Config.atr_period);
-   double adx     = ADX_Value(Config.adx_period);
-
-   string reason="";
-
-   // Trend rule
-   if(emaFast>emaSlow)
+   for(int i=0;i<g_symbol_count;i++)
      {
-      // Uptrend: consider BUY only
-      if(SignalsCanOpen(BUY_SIGNAL))
+      string sym = g_symbols[i];
+
+      // Basic filters per symbol
+      if(!FiltersAllowTrading(sym)) continue;
+
+      // Persistent Risk checks per symbol
+      if(!RiskAllowTrading(sym)) continue;
+
+      // Read indicators for symbol
+      double emaFast = EMA_Value(sym,Config.ema_fast_period);
+      double emaSlow = EMA_Value(sym,Config.ema_slow_period);
+      double rsi     = RSI_Value(sym,Config.rsi_period);
+      MACDData macd  = MACD_Value(sym,Config.macd_fast,Config.macd_slow,Config.macd_signal);
+      double atr     = ATR_Value(sym,Config.atr_period);
+      double adx     = ADX_Value(sym,Config.adx_period);
+
+      string reason="";
+
+      // Trend rule
+      if(emaFast>emaSlow)
         {
-         if(rsi<Config.rsi_threshold_buy && macd.isBearishCrossover)
+         if(SignalsCanOpen(sym,BUY_SIGNAL))
            {
-            reason = StringFormat("Uptrend: EMA50>EMA200, RSI=%.2f<%.2f, MACD bearish crossover=1, ATR=%.5f",rsi,Config.rsi_threshold_buy,atr);
-            TryOpenPosition(ORDER_TYPE_BUY,atr,reason);
+            if(rsi<Config.rsi_threshold_buy && macd.isBearishCrossover)
+              {
+               reason = StringFormat("Uptrend %s: EMA%d>EMA%d, RSI=%.2f<%.2f, MACD bearish crossover, ATR=%.5f",sym,Config.ema_fast_period,Config.ema_slow_period,rsi,Config.rsi_threshold_buy,atr);
+               TryOpenPosition(sym,ORDER_TYPE_BUY,atr,reason);
+              }
            }
         }
-     }
-   else if(emaFast<emaSlow)
-     {
-      // Downtrend: consider SELL only
-      if(SignalsCanOpen(SELL_SIGNAL))
+      else if(emaFast<emaSlow)
         {
-         if(rsi>Config.rsi_threshold_sell && macd.isBullishCrossover)
+         if(SignalsCanOpen(sym,SELL_SIGNAL))
            {
-            reason = StringFormat("Downtrend: EMA50<EMA200, RSI=%.2f>%.2f, MACD bullish crossover=1, ATR=%.5f",rsi,Config.rsi_threshold_sell,atr);
-            TryOpenPosition(ORDER_TYPE_SELL,atr,reason);
+            if(rsi>Config.rsi_threshold_sell && macd.isBullishCrossover)
+              {
+               reason = StringFormat("Downtrend %s: EMA%d<EMA%d, RSI=%.2f>%.2f, MACD bullish crossover, ATR=%.5f",sym,Config.ema_fast_period,Config.ema_slow_period,rsi,Config.rsi_threshold_sell,atr);
+               TryOpenPosition(sym,ORDER_TYPE_SELL,atr,reason);
+              }
            }
         }
-     }
 
-   // Manage existing trades
-   ManageOpenTrades();
+      // Manage open trades for this symbol
+      ManageOpenTrades(sym);
+     }
   }
 
 //+------------------------------------------------------------------+
-void TryOpenPosition(int order_type,double atr_value,const string entry_reason)
+void TryOpenPosition(const string symbol,int order_type,double atr_value,const string entry_reason)
   {
-   double stopLossPrice, takeProfitPrice;
    double slDistance = atr_value * Config.atr_multiplier;
+   double price=0;
+   if(order_type==ORDER_TYPE_BUY) price = SymbolInfoDouble(symbol,SYMBOL_ASK);
+   else price = SymbolInfoDouble(symbol,SYMBOL_BID);
 
-   if(order_type==ORDER_TYPE_BUY)
-     {
-      double price = SymbolInfoDouble(g_symbol,SYMBOL_ASK);
-      stopLossPrice = price - slDistance;
-      takeProfitPrice = price + slDistance * Config.risk_reward;
-     }
-   else
-     {
-      double price = SymbolInfoDouble(g_symbol,SYMBOL_BID);
-      stopLossPrice = price + slDistance;
-      takeProfitPrice = price - slDistance * Config.risk_reward;
-     }
+   double stopLossPrice = (order_type==ORDER_TYPE_BUY)? price - slDistance : price + slDistance;
+   double takeProfitPrice= (order_type==ORDER_TYPE_BUY)? price + slDistance * Config.risk_reward : price - slDistance * Config.risk_reward;
 
-   // Calculate volume
-   double volume = RiskCalculateVolume(slDistance);
-   if(volume<=0) { LogPrint("Calculated volume <=0, aborting"); return; }
+   double volume = RiskCalculateVolume(symbol,slDistance);
+   if(volume<=0) { LogPrint("Volume calc <=0 for %s",symbol); return; }
 
-   // Send order via order manager
-   ulong ticket = OrderSend(order_type,volume,stopLossPrice,takeProfitPrice,entry_reason);
-
+   ulong ticket = OrderSend(symbol,order_type,volume,stopLossPrice,takeProfitPrice,entry_reason);
    if(ticket>0)
      {
       LogTradeEntry(ticket,order_type,volume,stopLossPrice,takeProfitPrice,entry_reason);
+      PersistenceRegisterTrade(symbol,TimeCurrent(),ticket,order_type);
      }
   }
