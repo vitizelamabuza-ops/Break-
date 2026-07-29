@@ -32,7 +32,7 @@ void ManageOpenTrades(const string symbol)
         {
          string sym = PositionGetString(POSITION_SYMBOL);
          if(sym!=symbol) continue;
-         ulong ticket = PositionGetInteger(POSITION_TICKET);
+         ulong ticket = (ulong)PositionGetInteger(POSITION_TICKET);
          double volume = PositionGetDouble(POSITION_VOLUME);
          int type = (int)PositionGetInteger(POSITION_TYPE);
          double open_price = PositionGetDouble(POSITION_PRICE_OPEN);
@@ -47,14 +47,22 @@ void ManageOpenTrades(const string symbol)
             if(type==POSITION_TYPE_BUY)
               {
                double newSL = curPrice - trail;
-               if(newSL>sl) 
+               if(newSL>sl)
                  {
                   // modify
                   MqlTradeRequest req; MqlTradeResult res; ZeroMemory(req); ZeroMemory(res);
                   req.action = TRADE_ACTION_SLTP;
                   req.position = ticket;
                   req.sl = newSL;
-                  OrderSend(req,res);
+                  if(!OrderSend(req,res))
+                    {
+                     LogPrint(StringFormat("%s: Modify SL failed for ticket %I64u (API false)", sym, ticket));
+                    }
+                  else
+                    {
+                     if(res.retcode!=TRADE_RETCODE_DONE)
+                       LogPrint(StringFormat("%s: Modify SL returned ret=%d (%s) for ticket %I64u", sym, res.retcode, ErrorCodeToString(res.retcode), res.order));
+                    }
                  }
               }
             else
@@ -66,7 +74,15 @@ void ManageOpenTrades(const string symbol)
                   req.action = TRADE_ACTION_SLTP;
                   req.position = ticket;
                   req.sl = newSL;
-                  OrderSend(req,res);
+                  if(!OrderSend(req,res))
+                    {
+                     LogPrint(StringFormat("%s: Modify SL failed for ticket %I64u (API false)", sym, ticket));
+                    }
+                  else
+                    {
+                     if(res.retcode!=TRADE_RETCODE_DONE)
+                       LogPrint(StringFormat("%s: Modify SL returned ret=%d (%s) for ticket %I64u", sym, res.retcode, ErrorCodeToString(res.retcode), res.order));
+                    }
                  }
               }
            }
