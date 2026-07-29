@@ -15,7 +15,8 @@ string DateKey(datetime t)
 void PersistenceLoad(const string symbol)
   {
    string fname = StringFormat("/MQL5/Files/BreakEA_stats_%s.csv",symbol);
-   g_daily_stats[ArraySize(g_daily_stats)-1]; // noop to avoid unused
+   // safe no-op placeholder; do not access array out-of-range
+   if(ArraySize(g_daily_stats) < 0) {}
    // If file exists, load latest line for symbol
    int handle = FileOpen(fname,FILE_READ|FILE_ANSI);
    if(handle<0)
@@ -39,7 +40,7 @@ void PersistenceLoad(const string symbol)
    string parts[]; int n=StringSplit(lastLine,',',parts);
    if(n>=3)
      {
-      SDailyStats s; s.date = parts[0]; s.dailyPL = StrToDouble(parts[1]); s.dailyTrades = (int)StrToInteger(parts[2]);
+      SDailyStats s; s.date = parts[0]; s.dailyPL = StringToDouble(parts[1]); s.dailyTrades = (int)StringToInteger(parts[2]);
       // store in file with name scheme; for simplicity we keep a single current stats file per symbol
       // save to in-memory map by writing a file key per symbol
       // We'll use a simple approach: write latest values back on updates
@@ -69,7 +70,7 @@ void PersistenceRegisterTrade(const string symbol,datetime when,ulong ticket,int
       if(StringLen(lastLine)>0)
         {
          string parts[]; int n=StringSplit(lastLine,',',parts);
-         if(n>=3) { lastDate = parts[0]; lastPL = StrToDouble(parts[1]); lastTrades = (int)StrToInteger(parts[2]); }
+         if(n>=3) { lastDate = parts[0]; lastPL = StringToDouble(parts[1]); lastTrades = (int)StringToInteger(parts[2]); }
         }
      }
    if(lastDate==key)

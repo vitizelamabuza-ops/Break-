@@ -3,8 +3,8 @@
 //+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include "includes/config.mqh"
-#include "includes/utils.mqh"
 #include "includes/logging.mqh"
+#include "includes/utils.mqh"
 #include "includes/persistence.mqh"
 #include "includes/indicators/ema.mqh"
 #include "includes/indicators/rsi.mqh"
@@ -57,7 +57,7 @@ int OnInit()
       PersistenceLoad(s);
      }
 
-   LogPrint("Initialization complete for %d symbols",g_symbol_count);
+   LogPrint(StringFormat("Initialization complete for %d symbols", g_symbol_count));
    return(INIT_SUCCEEDED);
   }
 
@@ -101,7 +101,8 @@ void OnTick()
            {
             if(rsi<Config.rsi_threshold_buy && macd.isBearishCrossover)
               {
-               reason = StringFormat("Uptrend %s: EMA%d>EMA%d, RSI=%.2f<%.2f, MACD bearish crossover, ATR=%.5f",sym,Config.ema_fast_period,Config.ema_slow_period,rsi,Config.rsi_threshold_buy,atr);
+               reason = StringFormat("Uptrend %s: EMA%d>EMA%d, RSI=%.2f<%.2f, MACD bearish crossover, ATR=%.5f",
+                                     sym, Config.ema_fast_period, Config.ema_slow_period, rsi, Config.rsi_threshold_buy, atr);
                TryOpenPosition(sym,ORDER_TYPE_BUY,atr,reason);
               }
            }
@@ -112,7 +113,8 @@ void OnTick()
            {
             if(rsi>Config.rsi_threshold_sell && macd.isBullishCrossover)
               {
-               reason = StringFormat("Downtrend %s: EMA%d<EMA%d, RSI=%.2f>%.2f, MACD bullish crossover, ATR=%.5f",sym,Config.ema_fast_period,Config.ema_slow_period,rsi,Config.rsi_threshold_sell,atr);
+               reason = StringFormat("Downtrend %s: EMA%d<EMA%d, RSI=%.2f>%.2f, MACD bullish crossover, ATR=%.5f",
+                                     sym, Config.ema_fast_period, Config.ema_slow_period, rsi, Config.rsi_threshold_sell, atr);
                TryOpenPosition(sym,ORDER_TYPE_SELL,atr,reason);
               }
            }
@@ -135,12 +137,26 @@ void TryOpenPosition(const string symbol,int order_type,double atr_value,const s
    double takeProfitPrice= (order_type==ORDER_TYPE_BUY)? price + slDistance * Config.risk_reward : price - slDistance * Config.risk_reward;
 
    double volume = RiskCalculateVolume(symbol,slDistance);
-   if(volume<=0) { LogPrint("Volume calc <=0 for %s",symbol); return; }
+   if(volume<=0) { LogPrint(StringFormat("Volume calc <=0 for %s", symbol)); return; }
 
-   ulong ticket = OrderSend(symbol,order_type,volume,stopLossPrice,takeProfitPrice,entry_reason);
-   if(ticket>0)
+   bool trade_result=false;
+   ulong ticket=0;
+   if(order_type==ORDER_TYPE_BUY)
+     trade_result = Trade.Buy(volume, symbol, price, stopLossPrice, takeProfitPrice, entry_reason);
+   else
+     trade_result = Trade.Sell(volume, symbol, price, stopLossPrice, takeProfitPrice, entry_reason);
+
+   if(trade_result)
      {
-      LogTradeEntry(ticket,order_type,volume,stopLossPrice,takeProfitPrice,entry_reason);
-      PersistenceRegisterTrade(symbol,TimeCurrent(),ticket,order_type);
+      // CTrade stores result metadata — get the order/ticket id
+      ticket = Trade.ResultOrder();
+      if(ticket==0) ticket = Trade.ResultDeal(); // fallback if needed
+      LogTradeEntry(ticket, order_type, volume, stopLossPrice, takeProfitPrice, entry_reason);
+      PersistenceRegisterTrade(symbol, TimeCurrent(), ticket, order_type);
+     }
+   else
+     {
+      // Log failure (use the result code/description if needed)
+      LogPrint(StringFormat("Trade request failed for %s type=%d error=%d", symbol, order_type, Trade.ResultRetcode()));
      }
   }
