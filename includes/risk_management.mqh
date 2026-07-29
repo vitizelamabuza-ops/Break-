@@ -23,7 +23,7 @@ bool RiskAllowTrading(const string symbol)
       string parts[]; int n=StringSplit(lastLine,',',parts);
       if(n>=3)
         {
-         string date = parts[0]; double pl = StrToDouble(parts[1]); int trades = (int)StrToInteger(parts[2]);
+         string date = parts[0]; double pl = StringToDouble(parts[1]); int trades = (int)StringToInteger(parts[2]);
          if(trades>=Config.max_daily_trades) { LogPrint(StringFormat("%s: Reached max daily trades %d",symbol,trades)); return false; }
          double balance = AccountInfoDouble(ACCOUNT_BALANCE);
          double lossPercent = (pl<0) ? (MathAbs(pl)/balance)*100.0 : 0.0;
