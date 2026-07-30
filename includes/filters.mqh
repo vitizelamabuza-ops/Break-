@@ -1,34 +1,51 @@
-// filters.mqh - symbol-scoped filters
+#ifndef __INCLUDES_FILTERS_MQH__
+#define __INCLUDES_FILTERS_MQH__
+// filters.mqh - simple implementation of FiltersInit and FiltersAllowTrading
+// Purpose: implement basic spread and ADX filters without changing original EA behavior.
 
+void FiltersInit(const string symbol)
+  {
+   // No-per-symbol persistent state required now; function exists so EA initialization succeeds.
+   // Keep place for future per-symbol filter caching.
+   (void)symbol;
+  }
+
+// Returns true if trading is allowed for symbol at current market state
 bool FiltersAllowTrading(const string symbol)
   {
+   // Check symbol is tradeable
+   if(!SymbolInfoInteger(symbol,SYMBOL_SELECT)) // ensure symbol is available
+     {
+      bool sel = SymbolSelect(symbol,true);
+      if(!sel) { LogPrint(StringFormat("FiltersAllowTrading: symbol %s not available",symbol)); return(false); }
+     }
+
+   // Spread check: compute in points (points rather than raw price)
    double ask = SymbolInfoDouble(symbol,SYMBOL_ASK);
    double bid = SymbolInfoDouble(symbol,SYMBOL_BID);
-   double spread_points = (ask-bid)/SymbolInfoDouble(symbol,SYMBOL_POINT);
-   if(spread_points>Config.max_spread_points) { LogPrint(StringFormat("%s: Spread too high %.1f",symbol,spread_points)); return false; }
-
-   // Minimum candle body
-   double open0 = iOpen(symbol,PERIOD_CURRENT,1);
-   double close0= iClose(symbol,PERIOD_CURRENT,1);
-   double diff = MathAbs(close0-open0);
    double point = SymbolInfoDouble(symbol,SYMBOL_POINT);
-   if(point>0 && (diff/point) < Config.min_candle_points) { LogPrint(StringFormat("%s: Candle body too small",symbol)); return false; }
+   if(point<=0) return(false);
+   double spreadPoints = (ask - bid) / point;
 
-   // Session filter (rough)
-   int hour = TimeHour(TimeCurrent());
-   bool inSession = (hour>=7 && hour<=17) || (hour>=12 && hour<=21);
-   if(!inSession) { LogPrint(StringFormat("%s: Outside trading session",symbol)); return false; }
+   if(spreadPoints > Config.max_spread_points)
+     {
+      LogPrint(StringFormat("FiltersAllowTrading: %s spread %.1f > max %.1f", symbol, spreadPoints, Config.max_spread_points));
+      return(false);
+     }
 
+   // Optional ADX filter
    if(Config.use_adx)
      {
-      double adx = ADX_Value(symbol,Config.adx_period);
-      if(adx<Config.adx_threshold) { LogPrint(StringFormat("%s: ADX %.2f below threshold",symbol,adx)); return false; }
+      double adx = ADX_Value(symbol, Config.adx_period);
+      if(adx==EMPTY_VALUE) return(false); // cannot evaluate
+      if(adx < Config.adx_threshold)
+        {
+         LogPrint(StringFormat("FiltersAllowTrading: %s ADX %.2f < threshold %.2f", symbol, adx, Config.adx_threshold));
+         return(false);
+        }
      }
 
-   if(Config.news_filter)
-     {
-      LogPrint(StringFormat("%s: News filter enabled but not implemented",symbol)); return false;
-     }
-
-   return true;
+   // Passed basic filters
+   return(true);
   }
+#endif

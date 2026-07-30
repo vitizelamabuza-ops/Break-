@@ -1,19 +1,51 @@
-// indicators/macd.mqh - symbol-scoped MACD (main & signal) and simple crossover detection
+#ifndef __INCLUDES_IND_MACD_MQH__
+#define __INCLUDES_IND_MACD_MQH__
+// macd.mqh - symbol-scoped MACD helper that returns latest MACD values and simple crossover flags
+// Changes:
+// - Implemented MACD_Value returning MACDData structure
+// - Uses CopyBuffer safely and IndicatorRelease on handle
+// - Detects simple 1-bar crossover using the last two values
 
-struct MACDData { double main; double signal; bool isBearishCrossover; bool isBullishCrossover; };
+struct MACDData
+  {
+   double macd;
+   double signal;
+   double hist;
+   bool   isBullishCrossover;
+   bool   isBearishCrossover;
+  };
 
 MACDData MACD_Value(const string symbol,int fast,int slow,int signal)
   {
-   MACDData d; d.main=EMPTY_VALUE; d.signal=EMPTY_VALUE; d.isBearishCrossover=false; d.isBullishCrossover=false;
-   int handle = iMACD(symbol,PERIOD_CURRENT,fast,slow,signal,PRICE_CLOSE);
-   if(handle==INVALID_HANDLE) return d;
-   double mainArr[]; double signalArr[];
-   ArrayResize(mainArr,3); ArrayResize(signalArr,3);
-   if(CopyBuffer(handle,0,0,3,mainArr)<=0) { IndicatorRelease(handle); return d; }
-   if(CopyBuffer(handle,1,0,3,signalArr)<=0) { IndicatorRelease(handle); return d; }
-   d.main = mainArr[0]; d.signal = signalArr[0];
-   if(mainArr[1]>signalArr[1] && mainArr[0]<signalArr[0]) d.isBearishCrossover=true;
-   if(mainArr[1]<signalArr[1] && mainArr[0]>signalArr[0]) d.isBullishCrossover=true;
+   MACDData res;
+   res.macd = EMPTY_VALUE; res.signal = EMPTY_VALUE; res.hist = EMPTY_VALUE;
+   res.isBullishCrossover = false; res.isBearishCrossover = false;
+
+   int handle = iMACD(symbol, PERIOD_CURRENT, fast, slow, signal, PRICE_CLOSE);
+   if(handle==INVALID_HANDLE) return(res);
+
+   // We need the two most recent values to determine a crossover
+   double mainBuf[2];
+   double sigBuf[2];
+   if(CopyBuffer(handle, 0, 0, 2, mainBuf) <= 0 || CopyBuffer(handle, 1, 0, 2, sigBuf) <= 0)
+     {
+      IndicatorRelease(handle);
+      return(res);
+     }
+
+   // latest value index 0, previous index 1
+   res.macd = mainBuf[0];
+   res.signal = sigBuf[0];
+   res.hist = res.macd - res.signal;
+
+   // Detect crossovers: previous bar compared to current bar
+   double prevMain = mainBuf[1];
+   double prevSig  = sigBuf[1];
+
+   if(prevMain < prevSig && res.macd > res.signal) res.isBullishCrossover = true;
+   if(prevMain > prevSig && res.macd < res.signal) res.isBearishCrossover = true;
+
    IndicatorRelease(handle);
-   return d;
+   return(res);
   }
+#endif

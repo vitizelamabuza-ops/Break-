@@ -1,33 +1,32 @@
+#ifndef __INCLUDES_PERSISTENCE_MQH__
+#define __INCLUDES_PERSISTENCE_MQH__
 // persistence.mqh - track daily P/L and trade counts per symbol
+// Changes:
+// - Add header guards and keep file access to FILE_COMMON for portability.
+// - Kept simple format compatible with original implementation.
 
 struct SDailyStats { string date; double dailyPL; int dailyTrades; };
 
 SDailyStats g_daily_stats[]; // keyed by symbol index in global symbols list
 
-// helper to format date as YYYYMMDD
 string DateKey(datetime t)
   {
    MqlDateTime dt; TimeToStruct(t,dt);
    return(StringFormat("%04d%02d%02d",dt.year,dt.mon,dt.day));
   }
 
-// Load stats from file for symbol
 void PersistenceLoad(const string symbol)
   {
-   string fname = StringFormat("/MQL5/Files/BreakEA_stats_%s.csv",symbol);
-   // safe no-op placeholder; do not access array out-of-range
-   if(ArraySize(g_daily_stats) < 0) {}
-   // If file exists, load latest line for symbol
-   int handle = FileOpen(fname,FILE_READ|FILE_ANSI);
+   string fname = StringFormat("BreakEA_stats_%s.csv",symbol);
+   int handle = FileOpen(fname, FILE_READ|FILE_ANSI|FILE_COMMON);
    if(handle<0)
      {
-      // initialize file with today
+      // create file with today's baseline
       SDailyStats s; s.date = DateKey(TimeCurrent()); s.dailyPL=0; s.dailyTrades=0;
-      // Save immediately
-      int h = FileOpen(fname,FILE_WRITE|FILE_ANSI);
+      int h = FileOpen(fname, FILE_WRITE|FILE_ANSI|FILE_COMMON);
       if(h>=0)
         {
-         FileWrite(h, StringFormat("%s,%.2f,%d",s.date,s.dailyPL,s.dailyTrades));
+         FileWrite(h, StringFormat("%s,%.2f,%d", s.date, s.dailyPL, s.dailyTrades));
          FileClose(h);
         }
       return;
@@ -41,31 +40,26 @@ void PersistenceLoad(const string symbol)
    if(n>=3)
      {
       SDailyStats s; s.date = parts[0]; s.dailyPL = StringToDouble(parts[1]); s.dailyTrades = (int)StringToInteger(parts[2]);
-      // store in file with name scheme; for simplicity we keep a single current stats file per symbol
-      // save to in-memory map by writing a file key per symbol
-      // We'll use a simple approach: write latest values back on updates
+      // In this implementation we simply keep it available in memory if desired; not required by current EA.
      }
   }
 
 void PersistenceSave(const string symbol)
   {
-   string fname = StringFormat("/MQL5/Files/BreakEA_stats_%s.csv",symbol);
-   // For now we'll append current date line with zeroed values if missing
-   // This function is a placeholder; updates are done per trade by PersistenceRegisterTrade
-   return;
+   // Basic implementation: no-op to preserve original behavior
+   (void)symbol;
   }
 
 void PersistenceRegisterTrade(const string symbol,datetime when,ulong ticket,int type)
   {
-   string fname = StringFormat("/MQL5/Files/BreakEA_stats_%s.csv",symbol);
+   string fname = StringFormat("BreakEA_stats_%s.csv",symbol);
    string key = DateKey(when);
-   double pl=0.0; // try to read closed profit if immediate; we'll append zero and allow separate post-processing
-   int h = FileOpen(fname,FILE_READ|FILE_ANSI);
-   string lastDate=""; double lastPL=0; int lastTrades=0;
+   double lastPL=0; int lastTrades=0; string lastDate="";
+   int h = FileOpen(fname, FILE_READ|FILE_ANSI|FILE_COMMON);
    if(h>=0)
      {
       string lastLine="";
-      while(!FileIsEnding(h)) { string line=FileReadString(h); if(StringLen(StringTrim(line))>0) lastLine=line; }
+      while(!FileIsEnding(h)) { string line = FileReadString(h); if(StringLen(StringTrim(line))>0) lastLine=line; }
       FileClose(h);
       if(StringLen(lastLine)>0)
         {
@@ -76,13 +70,13 @@ void PersistenceRegisterTrade(const string symbol,datetime when,ulong ticket,int
    if(lastDate==key)
      {
       lastTrades++;
-      // append new line with updated totals (PL unknown until close)
-      int h2 = FileOpen(fname,FILE_WRITE|FILE_ANSI|FILE_APPEND);
-      if(h2>=0) { FileWrite(h2,StringFormat("%s,%.2f,%d",key,lastPL,lastTrades)); FileClose(h2); }
+      int h2 = FileOpen(fname, FILE_WRITE|FILE_ANSI|FILE_APPEND|FILE_COMMON);
+      if(h2>=0) { FileWrite(h2, StringFormat("%s,%.2f,%d", key, lastPL, lastTrades)); FileClose(h2); }
      }
    else
      {
-      int h2 = FileOpen(fname,FILE_WRITE|FILE_ANSI|FILE_APPEND);
-      if(h2>=0) { FileWrite(h2,StringFormat("%s,%.2f,%d",key,0.0,1)); FileClose(h2); }
+      int h2 = FileOpen(fname, FILE_WRITE|FILE_ANSI|FILE_APPEND|FILE_COMMON);
+      if(h2>=0) { FileWrite(h2, StringFormat("%s,%.2f,%d", key, 0.0, 1)); FileClose(h2); }
      }
   }
+#endif

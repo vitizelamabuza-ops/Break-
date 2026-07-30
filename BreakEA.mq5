@@ -16,13 +16,24 @@
 #include "includes/order_manager.mqh"
 #include "includes/trade_management.mqh"
 
+// Ensure a single CTrade instance is used throughout the EA
 CTrade Trade;
+
+// Global symbol list used by the EA
 string g_symbols[];
 int    g_symbol_count=0;
+
+// Signals - explicit constants so code is self-contained and clear
+enum ESignal
+  {
+   BUY_SIGNAL  = 1,
+   SELL_SIGNAL = 2
+  };
 
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   // Initialize logging first (file creation etc)
    if(!LoggingInit()) return(INIT_FAILED);
    LogPrint("BreakEA initializing multi-symbol manager");
 
@@ -50,28 +61,27 @@ int OnInit()
    for(int i=0;i<g_symbol_count;i++)
      {
       string s = g_symbols[i];
-      IndicatorsInit(s);
-      FiltersInit(s);
-      RiskInit(s);
-      TradeManagerInit(s);
-      PersistenceLoad(s);
+      IndicatorsInit(s);       // implemented in indicators/*.mqh
+      FiltersInit(s);          // implemented in includes/filters.mqh
+      RiskInit(s);             // implemented in includes/risk_management.mqh
+      TradeManagerInit(s);     // implemented in includes/trade_management.mqh
+      PersistenceLoad(s);      // implemented in includes/persistence.mqh
      }
 
    LogPrint(StringFormat("Initialization complete for %d symbols", g_symbol_count));
    return(INIT_SUCCEEDED);
   }
-
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
    for(int i=0;i<g_symbol_count;i++) PersistenceSave(g_symbols[i]);
    LoggingClose();
   }
-
 //+------------------------------------------------------------------+
 void OnTick()
   {
    static datetime lastRun=0;
+   // avoid multiple calls inside same second
    if(TimeCurrent()==lastRun) return; lastRun=TimeCurrent();
 
    for(int i=0;i<g_symbol_count;i++)
@@ -94,7 +104,7 @@ void OnTick()
 
       string reason="";
 
-      // Trend rule
+      // Trend rule preserved exactly from original logic
       if(emaFast>emaSlow)
         {
          if(SignalsCanOpen(sym,BUY_SIGNAL))
@@ -124,14 +134,20 @@ void OnTick()
       ManageOpenTrades(sym);
      }
   }
-
 //+------------------------------------------------------------------+
 void TryOpenPosition(const string symbol,int order_type,double atr_value,const string entry_reason)
   {
+   // Determine stop distance in price units
    double slDistance = atr_value * Config.atr_multiplier;
    double price=0;
    if(order_type==ORDER_TYPE_BUY) price = SymbolInfoDouble(symbol,SYMBOL_ASK);
    else price = SymbolInfoDouble(symbol,SYMBOL_BID);
+
+   if(price==0 || slDistance<=0.0)
+     {
+      LogPrint(StringFormat("Invalid price or slDistance for %s price=%.5f slDistance=%.5f",symbol,price,slDistance));
+      return;
+     }
 
    double stopLossPrice = (order_type==ORDER_TYPE_BUY)? price - slDistance : price + slDistance;
    double takeProfitPrice= (order_type==ORDER_TYPE_BUY)? price + slDistance * Config.risk_reward : price - slDistance * Config.risk_reward;
@@ -141,6 +157,7 @@ void TryOpenPosition(const string symbol,int order_type,double atr_value,const s
 
    bool trade_result=false;
    ulong ticket=0;
+   // Use CTrade correctly (price parameter optional for market orders; included for explicitness)
    if(order_type==ORDER_TYPE_BUY)
      trade_result = Trade.Buy(volume, symbol, price, stopLossPrice, takeProfitPrice, entry_reason);
    else
@@ -148,7 +165,7 @@ void TryOpenPosition(const string symbol,int order_type,double atr_value,const s
 
    if(trade_result)
      {
-      // CTrade stores result metadata — get the order/ticket id
+      // Retrieve result metadata
       ticket = Trade.ResultOrder();
       if(ticket==0) ticket = Trade.ResultDeal(); // fallback if needed
       LogTradeEntry(ticket, order_type, volume, stopLossPrice, takeProfitPrice, entry_reason);
@@ -156,7 +173,7 @@ void TryOpenPosition(const string symbol,int order_type,double atr_value,const s
      }
    else
      {
-      // Log failure (use the result code/description if needed)
+      // Log failure using result code
       LogPrint(StringFormat("Trade request failed for %s type=%d error=%d", symbol, order_type, Trade.ResultRetcode()));
      }
   }
