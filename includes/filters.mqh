@@ -7,7 +7,7 @@ void FiltersInit(const string symbol)
   {
    // No-per-symbol persistent state required now; function exists so EA initialization succeeds.
    // Keep place for future per-symbol filter caching.
-   (void)symbol;
+   string __unused_symbol = symbol;
   }
 
 // Returns true if trading is allowed for symbol at current market state

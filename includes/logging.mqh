@@ -25,11 +25,13 @@ void LoggingClose()
    g_logOpened=false; g_logHandle=-1;
   }
 
-void LogPrint(const string text)
+void LogPrint(const string message)
   {
-   string msg = text;
-   Print(msg);
-   if(g_logOpened && g_logHandle>=0) FileWrite(g_logHandle, TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS) + " " + msg);
+   // Print to Experts tab
+   Print(message);
+   // Also write to file if opened
+   if(g_logOpened && g_logHandle>=0)
+       FileWrite(g_logHandle, TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS) + " " + message);
   }
 
 void LogTradeEntry(ulong ticket,int type,double volume,double sl,double tp,const string reason)
