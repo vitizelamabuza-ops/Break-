@@ -43,7 +43,8 @@ void PersistenceLoad(const string symbol)
 
 void PersistenceSave(const string symbol)
   {
-   (void)symbol; // no-op placeholder
+   // Suppress unused-parameter warning without using invalid (void) cast
+   string __unused_symbol = symbol;
   }
 
 void PersistenceRegisterTrade(const string symbol,datetime when,ulong ticket,int type)

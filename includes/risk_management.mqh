@@ -9,7 +9,7 @@
 void RiskInit(const string symbol)
   {
    // No per-symbol persistent state needed in this simple implementation.
-   (void)symbol;
+   string __unused_symbol = symbol;
   }
 
 // Check persistent risk constraints (daily loss / max drawdown).
@@ -18,7 +18,7 @@ bool RiskAllowTrading(const string symbol)
   {
    // For now implement simple daily trades limit check using persistence file stats
    // Keep behavior conservative: if we cannot read stats, allow trading.
-   (void)symbol;
+   string __unused_symbol = symbol;
    return(true);
   }
 

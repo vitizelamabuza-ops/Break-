@@ -9,7 +9,7 @@
 void TradeManagerInit(const string symbol)
   {
    // No state required for now; function exists so EA initialization succeeds.
-   (void)symbol;
+   string __unused_symbol = symbol;
   }
 
 // SignalsCanOpen - checks for duplicate prevention and optionally closing opposite trades
@@ -25,8 +25,9 @@ bool SignalsCanOpen(const string symbol,int side)
          return(false);
         }
      }
+   // suppress unused parameter warning for side
+   int __unused_side = side;
    // Additional checks (daily limits, risk manager) can be integrated here
-   (void)side;
    return(true);
   }
 
@@ -38,15 +39,11 @@ void ManageOpenTrades(const string symbol)
    int total = PositionsTotal();
    for(int i=0;i<total;i++)
      {
-      // Use PositionGetTicket(index) function pattern: MQL5 does not provide PositionGetTicket(index) as such,
-      // so we use PositionGetInteger(POSITION_TICKET) after PositionSelectByIndex alternative:
-      // Use PositionGetSymbol from the positions enumerator (via PositionGetString)
-      // Simpler: enumerate positions via PositionGet* APIs by selecting the position by index using PositionSelectByTicket
-      // The MQL5 API provides PositionGetTicket(index) via PositionGetInteger(POSITION_TICKET) after selecting by index;
-      // there is no portable PositionSelectByIndex, so we simply skip complex management to avoid accidental changes.
-      (void)i;
+      // suppress unused loop-variable warning
+      int __unused_i = i;
      }
+   // suppress unused parameter warning for symbol
+   string __unused_symbol = symbol;
    // For now, no action is taken that changes positions; this preserves strategy behavior.
-   (void)symbol;
   }
 #endif
