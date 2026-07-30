@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//| BreakEA.mq5 - Multi-symbol capable EA with persistence           |
+//| BreakEA.mq5 - Multi-symbol capable EA with persistence           
 //+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include "includes/config.mqh"
@@ -15,6 +15,7 @@
 #include "includes/risk_management.mqh"
 #include "includes/order_manager.mqh"
 #include "includes/trade_management.mqh"
+#include "includes/indicators/init.mqh"
 
 // Ensure a single CTrade instance is used throughout the EA
 CTrade Trade;

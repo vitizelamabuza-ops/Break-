@@ -1,9 +1,6 @@
 #ifndef __INCLUDES_PERSISTENCE_MQH__
 #define __INCLUDES_PERSISTENCE_MQH__
-// persistence.mqh - track daily P/L and trade counts per symbol
-// Changes:
-// - Add header guards and keep file access to FILE_COMMON for portability.
-// - Kept simple format compatible with original implementation.
+// persistence.mqh - track daily P/L and trade counts per symbol (portable append behavior)
 
 struct SDailyStats { string date; double dailyPL; int dailyTrades; };
 
@@ -40,14 +37,13 @@ void PersistenceLoad(const string symbol)
    if(n>=3)
      {
       SDailyStats s; s.date = parts[0]; s.dailyPL = StringToDouble(parts[1]); s.dailyTrades = (int)StringToInteger(parts[2]);
-      // In this implementation we simply keep it available in memory if desired; not required by current EA.
+      // kept in memory if needed
      }
   }
 
 void PersistenceSave(const string symbol)
   {
-   // Basic implementation: no-op to preserve original behavior
-   (void)symbol;
+   (void)symbol; // no-op placeholder
   }
 
 void PersistenceRegisterTrade(const string symbol,datetime when,ulong ticket,int type)
@@ -70,13 +66,24 @@ void PersistenceRegisterTrade(const string symbol,datetime when,ulong ticket,int
    if(lastDate==key)
      {
       lastTrades++;
-      int h2 = FileOpen(fname, FILE_WRITE|FILE_ANSI|FILE_APPEND|FILE_COMMON);
-      if(h2>=0) { FileWrite(h2, StringFormat("%s,%.2f,%d", key, lastPL, lastTrades)); FileClose(h2); }
+      int h2 = FileOpen(fname, FILE_WRITE|FILE_ANSI|FILE_COMMON);
+      if(h2>=0)
+        {
+         FileSeek(h2, 0, SEEK_END);
+         FileWrite(h2, StringFormat("%s,%.2f,%d", key, lastPL, lastTrades));
+         FileClose(h2);
+        }
      }
    else
      {
-      int h2 = FileOpen(fname, FILE_WRITE|FILE_ANSI|FILE_APPEND|FILE_COMMON);
-      if(h2>=0) { FileWrite(h2, StringFormat("%s,%.2f,%d", key, 0.0, 1)); FileClose(h2); }
+      int h2 = FileOpen(fname, FILE_WRITE|FILE_ANSI|FILE_COMMON);
+      if(h2>=0)
+        {
+         FileSeek(h2, 0, SEEK_END);
+         FileWrite(h2, StringFormat("%s,%.2f,%d", key, 0.0, 1));
+         FileClose(h2);
+        }
      }
   }
+
 #endif
